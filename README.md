@@ -20,7 +20,7 @@ sudo bash ./install.sh
 
 ## Running the Application
 ```
-clone this repo
+git clone https://github.com/lkvposs/predix-demos-edge-sensors.git
 cd predix-demos-edge-sensors
 npm install
 node app.js
