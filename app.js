@@ -42,9 +42,12 @@ function initializeBoard() {
 				dhtSensor.on('change', function(res) {
 					var filteredData = filterDHT(res);
 					if(filteredData) {
-						console.log('Temperature: ' + filteredData['temperature']);
-						console.log('Humidity: ' + filteredData['humidity']);
-						ws.send(JSON.stringify(filteredData));
+						console.log('Temperature: ' + filteredData[0].datapoints[0][1]);
+						console.log('Humidity: ' + filteredData[1].datapoints[0][1]);
+						// Send temperature reading to forwarding server
+						ws.send(JSON.stringify(filteredData[0]));
+						// Send humidity reading to forwarding server
+						ws.send(JSON.stringify(filteredData[1]));
 					}
 				});
 				dhtSensor.watch(500);	// milliseconds
@@ -69,11 +72,16 @@ function filterDHT(readValues) {
 	else {
 		// Correctly format the data to send to our forwarding server
 		// Remove the last reading
-		var tempAndHum = {
-			"temperature": readValues[0],
-			"humidity": readValues[1]
+		var data = new Array();
+		data[0] = {
+			"name": "somewhere/Temperature",
+			"datapoints": [[Date.now(), readValues[0]]]
 		};
-		return tempAndHum;
+		data[1] = {
+			"name": "somewhere/Humidity",
+			"datapoints": [[Date.now(), readValues[1]]]
+		};
+		return data;
 	}
 }
 
