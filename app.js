@@ -7,7 +7,7 @@ var DHTDigitalSensor = GrovePi.sensors.DHTDigital;
 
 var grovePiBoard;
 
-//const ws = new WebSocket('ws://predix-demos-forwarding-server.run.aws-usw02-pr.ice.predix.io');
+//const ws = new WebSocket('ws://predix-demos-forwarding-server.run.aws-usw02-pr.ice.predix.io/input/WonderWoman/');
 const ws = new WebSocket('ws://10.15.16.187:8083');
 
 ws.on('open', function open() {
@@ -75,11 +75,13 @@ function filterDHT(readValues) {
 		var data = new Array();
 		data[0] = {
 			"name": "somewhere/Temperature",
-			"datapoints": [[Date.now(), readValues[0]]]
+			"datapoints": [[Date.now(), readValues[0]]],
+			"tag": "temperature"
 		};
 		data[1] = {
 			"name": "somewhere/Humidity",
-			"datapoints": [[Date.now(), readValues[1]]]
+			"datapoints": [[Date.now(), readValues[1]]],
+			"tag": "humidity"
 		};
 		return data;
 	}
