@@ -99,6 +99,27 @@ function initializeBoard() {
 								else {
 									previousPeriods.shift();
 									previousPeriods.push(period);
+									var ave = 0;
+									for (var i=0; i<previousPeriods.length; i++) {
+										ave += previousPeriods[i];
+									}
+									ave /= previousPeriods.length;
+									console.log('Cached period data: ' + previousPeriods);
+									console.log('Average period data: ' + ave);
+									var frequency = 60/ave;
+									console.log('Frequency data: ' + frequency);
+									var data = new Array();
+									data[0] = {
+										"name": "arlington/frequency",
+										"datapoints": [[Date.now(), frequency]],
+										"tag": "frequency"
+									};
+									try {
+										ws.send(JSON.stringify(data[0]));
+									}
+									catch (err) {
+										console.log('Did not send data');
+									}
 								}
 								previousTimeReading = currentTimeReading;
 							}
@@ -148,33 +169,6 @@ function filterDHT(readValues) {
 		return data;
 	}
 }
-
-function sendFrequency(periodsArray) {
-	var periods = periodsArray.slice();
-	var ave = 0;
-	for (var i=0; i<periods.length; i++) {
-		ave += periods[i];
-	}
-	ave /= periods.length;
-	console.log('Cached period data: ' + periods);
-	console.log('Average period data: ' + ave);
-	var frequency = 60/ave;
-	console.log('Frequency data: ' + frequency);
-	var data = new Array();
-	data[0] = {
-		"name": "arlington/frequency",
-		"datapoints": [[Date.now(), frequency]],
-		"tag": "frequency"
-	};
-	try {
-		ws.send(JSON.stringify(data[0]));
-	}
-	catch (err) {
-		console.log('Did not send data');
-	}
-}
-
-
 
 function onExit(err) {
 	console.log('Shutting down the GrovePi');
