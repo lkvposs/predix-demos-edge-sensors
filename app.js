@@ -8,16 +8,16 @@ var UltrasonicSensor = GrovePi.sensors.UltrasonicDigital;
 
 var grovePiBoard;
 
+var PI_IDENTIFIER = "Arlington";
+var STATIONARY_BLADE_TIMEOUT = 5; // in seconds
 var previousTimeReading = -1;
 var previousUltrasonicReading = -1;
 var WING_DISTANCE_THRESHOLD = 10;
 var previousPeriods = new Array();
-var NUMBER_PREVIOUS_PERIODS = 5;
-var previous_periods = 0;
-var smoothedPeriod;
+var NUM_PERIODS_TO_AVERAGE = 5;
 
-const ws = new WebSocket('wss://predix-demos-forwarding-server.run.aws-usw02-pr.ice.predix.io/input/west/arlington');
-//const ws = new WebSocket('ws://10.15.29.216:8083');
+//const ws = new WebSocket('wss://predix-demos-forwarding-server.run.aws-usw02-pr.ice.predix.io/input/west/arlington');
+const ws = new WebSocket('ws://10.0.0.172:8083');
 
 ws.on('open', function open() {
 	console.log('Websocket connection established');
@@ -64,18 +64,9 @@ function initializeBoard() {
 				dhtSensor.watch(500);	// milliseconds
 
 				console.log('Begin poll of sensor: Ultrasonice Sensor');
-				//ultrasonicSensor.on('change', function(res) {
-				//	console.log('Ultrasonic reading: ' + res);
-				//});
-				//ultrasonicSensor.watch();
 				ultrasonicSensor.stream(10, function(res) {
 					console.log('Ultrasonic reading: ' + res);
-					var data = new Array();
-					data[0] = {
-						"name": "arlington/ultrasonic",
-						"datapoints": [[Date.now(), res]],
-						"tag": "ultrasonic"
-					};
+					var data = packageData({"ultrasonic": res});
 					try {
 						ws.send(JSON.stringify(data[0]));
 					}
@@ -89,30 +80,26 @@ function initializeBoard() {
 						if (res < WING_DISTANCE_THRESHOLD && previousUltrasonicReading > WING_DISTANCE_THRESHOLD) {
 							var currentTimeReading = Date.now();
 							if (previousTimeReading != -1) {
-								// Calculate frequency
+								// Calculate period
 								var currentTimeReading = Date.now();
 								var period = (currentTimeReading - previousTimeReading)*3/1000;
-								if (previous_periods < NUMBER_PREVIOUS_PERIODS) {
+								if (previousPeriods.length < NUM_PERIODS_TO_AVERAGE) {
 									previousPeriods.push(period);
-									previous_periods += 1;
 								}
 								else {
 									previousPeriods.shift();
 									previousPeriods.push(period);
 								}
 								previousTimeReading = currentTimeReading;
+								sendFrequency(previousPeriods);
 							}
 							previousTimeReading = currentTimeReading;
 						}
 						previousUltrasonicReading = res;
 					}
-					//var ultrasonicReading = {
-					//	"name": "Arlington/Ultrasonic",
-					//	"datapoints": [[Date.now(), res]],
-					//	"tag": "ultrasonic"
-					//};
-					//ws.send(JSON.stringify(ultrasonicReading));
 				});
+				// Add interval to check if turbine blades are stationary
+				setInterval(checkStationaryBlades, STATIONARY_BLADE_TIMEOUT*1000);
 			}
 			else {
 				console.log('Unable to initialize GrovePi');
@@ -121,6 +108,7 @@ function initializeBoard() {
 	});
 	grovePiBoard.init();
 }
+
 
 /*
 	The Temperature & Humidity sensor likes to produce readings
@@ -134,38 +122,33 @@ function filterDHT(readValues) {
 	else {
 		// Correctly format the data to send to our forwarding server
 		// Remove the last reading
-		var data = new Array();
-		data[0] = {
-			"name": "Arlington/Temperature",
-			"datapoints": [[Date.now(), readValues[0]]],
-			"tag": "temperature"
-		};
-		data[1] = {
-			"name": "Arlington/Humidity",
-			"datapoints": [[Date.now(), readValues[1]]],
-			"tag": "humidity"
-		};
+		var data = packageData({
+			"temperature": readValues[0],
+			"humidity": readValues[1]
+		});
 		return data;
 	}
 }
 
+
+Array.prototype.sum = function() {
+	return this.reduce(function(a,b){return a+b;});
+};
+
+
+/*
+	Average the last 5 measured period values from the
+	ultrasonic sensor. Using the averaged period, calculate
+	the frequency (1/period). Send the frequency to the
+	forwarding server.
+*/
 function sendFrequency(periodsArray) {
-	var periods = periodsArray.slice();
-	var ave = 0;
-	for (var i=0; i<periods.length; i++) {
-		ave += periods[i];
-	}
-	ave /= periods.length;
-	console.log('Cached period data: ' + periods);
-	console.log('Average period data: ' + ave);
-	var frequency = 60/ave;
+	var average = periodsArray.sum()/periodsArray.length;
+	//console.log('Cached period data: ' + periodsArray);
+	//console.log('Average period data: ' + average);
+	var frequency = 60/average;
 	console.log('Frequency data: ' + frequency);
-	var data = new Array();
-	data[0] = {
-		"name": "arlington/frequency",
-		"datapoints": [[Date.now(), frequency]],
-		"tag": "frequency"
-	};
+	var data = packageData({"frequency": frequency});
 	try {
 		ws.send(JSON.stringify(data[0]));
 	}
@@ -174,6 +157,50 @@ function sendFrequency(periodsArray) {
 	}
 }
 
+
+/*
+	Callback to check if the time between now and the
+	last time an ultrasonic reading was made is excessive
+	enough to consider that the turbine blades have stopped
+	rotating, and thus their spinning frequency would be 0.
+*/
+function checkStationaryBlades() {
+	var currentTime = Date.now();
+	var zeroReading = JSON.stringify(packageData({"frequency": 0})[0]);
+	if (previousTimeReading === -1) {
+		// No readings have been made yet -- frequency is 0
+		console.log("Frequency is 0");
+		ws.send(zeroReading);
+	}
+	else if (((currentTime - previousTimeReading)/1000) > STATIONARY_BLADE_TIMEOUT) {
+		// Stationary time has elapsed -- assume blades have stopped turning
+		console.log("Frequency is 0");
+		ws.send(zeroReading);
+	}
+}
+
+
+/*
+	Returns a sensor reading in the format expected by the
+	forwarding server.
+	data is expected to be a JSON object of the form:
+	{"dataType1": dataValue1, "dataType2": dataValue2, etc.}
+*/
+function packageData(data) {
+	var packagedData = new Array();
+	var currentTime = Date.now();
+	var i = 0;
+	for (var dataType in data) {
+		packagedData[i] = {
+			"name": PI_IDENTIFIER + "/" + dataType,
+			"datapoints": [[currentTime, data[dataType]]],
+			"tag": dataType
+		};
+		i++;
+	}
+
+	return packagedData;
+}
 
 
 function onExit(err) {
