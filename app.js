@@ -8,16 +8,21 @@ var UltrasonicSensor = GrovePi.sensors.UltrasonicDigital;
 
 var grovePiBoard;
 
-var PI_IDENTIFIER = "Arlington";
+var PI_IDENTIFIER = "arlington";
 var STATIONARY_BLADE_TIMEOUT = 5; // in seconds
 var previousTimeReading = -1;
 var previousUltrasonicReading = -1;
-var WING_DISTANCE_THRESHOLD = 10;
 var previousPeriods = new Array();
 var NUM_PERIODS_TO_AVERAGE = 5;
+var ULTRASONIC_SCALING_FACTOR = 10/513;
+var WING_DISTANCE_THRESHOLD = 10;
+var ROUNDING_CONSTANT = 100;
 
-//const ws = new WebSocket('wss://predix-demos-forwarding-server.run.aws-usw02-pr.ice.predix.io/input/west/arlington');
-const ws = new WebSocket('ws://10.0.0.172:8083');
+
+var ws;
+ws = new WebSocket('wss://predix-demos-forwarding-server.run.aws-usw02-pr.ice.predix.io/input/west/arlington');
+//const ws = new WebSocket('ws://10.15.27.27:8083');
+
 
 ws.on('open', function open() {
 	console.log('Websocket connection established');
@@ -29,6 +34,11 @@ ws.on('message', function message(data, flags) {
 
 ws.on('close', function close() {
 	console.log('Websocket connection closed');
+});
+
+ws.on('error', function handleError() {
+	console.log('Error connecting to WS');
+	ws = new WebSocket('wss://predix-demos-forwarding-server.run.aws-usw02-pr.ice.predix.io/input/west/arlington');
 });
 
 function initializeBoard() {
@@ -53,12 +63,17 @@ function initializeBoard() {
 				dhtSensor.on('change', function(res) {
 					var filteredData = filterDHT(res);
 					if(filteredData) {
-						//console.log('Temperature: ' + filteredData[0].datapoints[0][1]);
-						//console.log('Humidity: ' + filteredData[1].datapoints[0][1]);
+						console.log('Temperature: ' + filteredData[0].datapoints[0][1]);
+						console.log('Humidity: ' + filteredData[1].datapoints[0][1]);
 						// Send temperature reading to forwarding server
-						ws.send(JSON.stringify(filteredData[0]));
-						// Send humidity reading to forwarding server
-						ws.send(JSON.stringify(filteredData[1]));
+						try {
+							ws.send(JSON.stringify(filteredData[0]));
+							// Send humidity reading to forwarding 
+							ws.send(JSON.stringify(filteredData[1]));
+						}
+						catch (err) {
+							console.log('Did not send temperature and humidity data');
+						}
 					}
 				});
 				dhtSensor.watch(500);	// milliseconds
@@ -66,12 +81,12 @@ function initializeBoard() {
 				console.log('Begin poll of sensor: Ultrasonice Sensor');
 				ultrasonicSensor.stream(10, function(res) {
 					console.log('Ultrasonic reading: ' + res);
-					var data = packageData({"ultrasonic": res});
+					var data = packageData({"ultrasonic": res*ULTRASONIC_SCALING_FACTOR});
 					try {
 						ws.send(JSON.stringify(data[0]));
 					}
 					catch (err) {
-						console.log('Did not send data');
+						console.log('Did not send ultrasonic data data');
 					}
 					if (previousUltrasonicReading === -1) {
 						previousUltrasonicReading = res;
@@ -147,13 +162,13 @@ function sendFrequency(periodsArray) {
 	//console.log('Cached period data: ' + periodsArray);
 	//console.log('Average period data: ' + average);
 	var frequency = 60/average;
-	console.log('Frequency data: ' + frequency);
-	var data = packageData({"frequency": frequency});
+	console.log('Frequency data: ' + Math.round(frequency*ROUNDING_CONSTANT)/ROUNDING_CONSTANT);
+	var data = packageData({"frequency": Math.round(frequency*ROUNDING_CONSTANT)/ROUNDING_CONSTANT});
 	try {
 		ws.send(JSON.stringify(data[0]));
 	}
 	catch (err) {
-		console.log('Did not send data');
+		console.log('Did not send frequency data');
 	}
 }
 
