@@ -26,6 +26,11 @@ cd predix-demos-edge-sensors
 npm install
 node app.js
 ```
+Note: if npm is not already installed on the pi, run the following commands:
+```
+curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash
+sudo apt-get install nodejs
+```
 
 ## Starting the Application Automatically on Boot
 Open your pi's bash profile:
