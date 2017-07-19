@@ -6,6 +6,10 @@ Requires a [GrovePi board](https://www.dexterindustries.com/shop/grovepi-board/)
 
 Currently this app supports reading from the [GrovePi Temperature and Humidity Sensor](https://www.seeedstudio.com/Grove-Temperature%26amp%3BHumidity-Sensor-Pro-p-838.html) and the [Grove Ultrasonic Ranger](https://www.seeedstudio.com/Grove-Ultrasonic-Ranger-p-960.html).
 
+## Pi Setup
+Connect to wifi. If on GE Network, use Internet.
+The keyboard may be in UK setup. If so, the @ key will be accessible by using the key where the " is located on the US layout.
+
 ## Hardware Setup
 Attach GrovePi board onto raspberry pi
 Attach Temperature and Humidity Sensor into Digital Port 4 of the GrovePi board
@@ -23,9 +27,15 @@ sudo bash ./install.sh
 ```
 git clone https://github.com/lkvposs/predix-demos-edge-sensors.git
 cd predix-demos-edge-sensors
+curl -sL https://deb.nodesource.com/setup_8.x | sudo -E bash -
+sudo apt install nodejs
 npm install
 node app.js
 ```
+Open app.js:
+* Line 11: Set PI_IDENTIFIER to the asset's name. This asset must be represented in the dashboard's hierarchy.
+* Line 23: Set the endpoint to point to the right asset hierarchy. E.g. change "west/arlington" to "texas/abilene"
+* Line 41: Same as line 23
 
 ## Starting the Application Automatically on Boot
 Open your pi's bash profile:
